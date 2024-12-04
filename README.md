@@ -1,5 +1,5 @@
 
-# Bold MCP Server
+# BOLD MCP Server
 
 A Model Context Protocol server that provides capabilities for searching BOLD specimens. This server enables LLMs to retrieve and process content related to specific BOLD Rest API search queries in a simplified manner.
 
