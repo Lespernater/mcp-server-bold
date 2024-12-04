@@ -14,7 +14,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 # Defaults
-API_BASE_URL = "http://v3.boldsystems.org/index.php/API_Public/specimen"
+API_BASE_URL = "http://v3.boldsystems.org/index.php/API_Public/"
 DEFAULT_PARAMETERS = {"format": "xml"}
 
 class BoldQuery(BaseModel):
@@ -62,7 +62,7 @@ async def serve() -> None:
                 ])
 
                 # Query API
-                response = await client.get(f"{API_BASE_URL}?{query_string}")
+                response = await client.get(f"{API_BASE_URL}specimen?{query_string}")
             response.raise_for_status()  # Raise any errors
             logger.info("Successfully fetched specimens.")
 
@@ -92,7 +92,6 @@ async def serve() -> None:
         :param kwargs: Parameters for BOLD specimen query
         :return: JSON of retrieved specimen plus sequences data
         """
-        base_url = "http://v3.boldsystems.org/index.php/API_Public/combined"
         # Prepare query parameters
         query_params = {**DEFAULT_PARAMETERS, **kwargs} if isinstance(DEFAULT_PARAMETERS, dict) else {}
         # Must be tsv for combined query
@@ -107,7 +106,7 @@ async def serve() -> None:
                 ])
 
                 # Query API
-                response = await client.get(f"{base_url}?{query_string}")
+                response = await client.get(f"{API_BASE_URL}combined?{query_string}")
             response.raise_for_status()  # Raise any errors
             logger.info("Successfully fetched specimens.")
 
