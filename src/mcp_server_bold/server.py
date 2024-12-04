@@ -149,7 +149,7 @@ async def serve() -> None:
             ),
             Tool(
                 name=BoldTools.SEQUENCE_SPECIMEN,
-                description="Query BOLD Rest API for both specimen info and sequence in a tsv",
+                description="Query BOLD Rest API for both specimen info and sequence",
                 inputSchema=BoldSeqQuery.schema(),
             ),
             # Add new tools here

@@ -11,7 +11,6 @@ repository = "https://github.com/lespernater/mcp-server-bold"
 [context_servers.mcp-server-bold]
 name = "BOLD Context Server"
 
-
 [slash_commands.bold]
 description = "Queries the BOLD API"
 requires_argument = true
