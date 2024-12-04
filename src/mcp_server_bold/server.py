@@ -3,19 +3,12 @@ import xmltodict
 import requests  # Using requests instead of httpx
 import httpx
 import json
-from urllib.parse import urlparse
 from pathlib import Path
-from typing import Sequence
 from mcp.server import Server
-from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
-import mcp.types as types
 from mcp.types import (
-    ClientCapabilities,
     TextContent,
     Tool,
-    ListRootsResult,
-    RootsCapability,
 )
 from enum import Enum
 from pydantic import BaseModel, Field
@@ -25,7 +18,6 @@ API_BASE_URL = "http://v3.boldsystems.org/index.php/API_Public/specimen"
 DEFAULT_PARAMETERS = {"format": "xml"}
 
 class BoldQuery(BaseModel):
-    format: str = Field(default="xml", examples=["xml", "tsv"])
     taxon: str = Field(default="", description="""Taxonomic query (e.g., 'Aves', 'Bos taurus')""")
     geo: str = Field(default="", description="""Geographic sites (countries/provinces, pipe-delimited)""")
     ids: str = Field(default="", description="""Specific specimen IDs (pipe-delimited)""")
@@ -34,9 +26,16 @@ class BoldQuery(BaseModel):
     institution: str = Field(default="", description="""Specimen storing institutions (pipe-delimited)""")
     researchers: str = Field(default="", description="""Collector or identifier names (pipe-delimited)""")
 
+class BoldSpecQuery(BoldQuery):
+    format: str = Field(default="xml", examples=["xml", "tsv"])
+
+class BoldSeqQuery(BoldQuery):
+    marker: str = Field(default="", description="""Marker codes like 'matK', 'rbcL', 'COI-5P' (pipe-delimited)""")
+
 
 class BoldTools(str, Enum):
     SPECIMEN = "specimen-search"
+    SEQUENCE_SPECIMEN = "sequence-specimen-search"
 
 
 async def serve() -> None:
@@ -86,6 +85,46 @@ async def serve() -> None:
             logger.error(f"Error fetching specimens: {str(e)}")
             raise
 
+    async def fetch_bold_seq_specimens(**kwargs):
+        """
+        Fetch specimens with sequences from BOLD API based on provided parameters.
+
+        :param kwargs: Parameters for BOLD specimen query
+        :return: JSON of retrieved specimen plus sequences data
+        """
+        base_url = "http://v3.boldsystems.org/index.php/API_Public/combined"
+        # Prepare query parameters
+        query_params = {**DEFAULT_PARAMETERS, **kwargs} if isinstance(DEFAULT_PARAMETERS, dict) else {}
+        # Must be tsv for combined query
+        query_params["format"] = "tsv"
+        logger.info(f"Fetching specimens with parameters: {query_params}")
+
+        try:
+            async with httpx.AsyncClient() as client:
+                # Build formatted query string to add to API CALL
+                query_string = '&'.join([
+                    f"{key}={requests.utils.quote(str(value))}" for key, value in query_params.items() if value != ""
+                ])
+
+                # Query API
+                response = await client.get(f"{base_url}?{query_string}")
+            response.raise_for_status()  # Raise any errors
+            logger.info("Successfully fetched specimens.")
+
+            # Check the format parameter to determine how to handle the response
+            if query_params.get('format') == 'tsv':
+                # For TSV format, convert response to a structured dictionary
+                tsv_data = response.text.splitlines()
+                headers = tsv_data[0].split('\t')
+                json_list = [dict(zip(headers, row.split('\t'))) for row in tsv_data[1:]]
+                return json.dumps(json_list)  # Return JSON response
+            else:
+                logger.error("Unsupported format requested.")
+                raise ValueError("Unsupported format requested.")
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+            logger.error(f"Error fetching specimens: {str(e)}")
+            raise
+
     async def read_log_file():
         logger = logging.getLogger(__name__)
         log_file_path = Path("server.log")  # Path to the log file
@@ -106,7 +145,12 @@ async def serve() -> None:
             Tool(
                 name=BoldTools.SPECIMEN,
                 description="Query BOLD Rest API for a specimen",
-                inputSchema=BoldQuery.schema(),
+                inputSchema=BoldSpecQuery.schema(),
+            ),
+            Tool(
+                name=BoldTools.SEQUENCE_SPECIMEN,
+                description="Query BOLD Rest API for both specimen info and sequence in a tsv",
+                inputSchema=BoldSeqQuery.schema(),
             ),
             # Add new tools here
         ]
@@ -128,6 +172,13 @@ async def serve() -> None:
                 return [TextContent(
                     type="text",
                     text=f"Specimen returned:\n{json.dumps(specimen_data)}"
+                )]
+            case BoldTools.SEQUENCE_SPECIMEN:
+                # Fetch specimens
+                specimen_data = await fetch_bold_seq_specimens(**query_params)
+                return [TextContent(
+                    type="text",
+                    text=f"Specimen with sequences returned:\n{json.dumps(specimen_data)}"
                 )]
             # Add other tools here
         # When don't recognize tool
