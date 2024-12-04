@@ -1,6 +1,6 @@
 import logging
 import xmltodict
-import requests  # Using requests instead of httpx
+import requests
 import httpx
 import json
 from pathlib import Path
