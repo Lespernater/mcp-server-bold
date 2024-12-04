@@ -124,6 +124,7 @@ async def serve() -> None:
             logger.error(f"Error fetching specimens: {str(e)}")
             raise
 
+    # WIP
     async def read_log_file():
         logger = logging.getLogger(__name__)
         log_file_path = Path("server.log")  # Path to the log file
