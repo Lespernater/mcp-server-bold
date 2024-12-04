@@ -5,7 +5,8 @@ A Model Context Protocol server that provides capabilities for searching BOLD sp
 
 ### Available Tools
 
-- `specimen-search` - Searches for specimens based on given criteria.
+- `specimen-search` - Fetches specimen data based on given criteria.
+- `sequence-specimen-search` - Fetches specimen and sequence data based on given criteria.
 
 ## Installation
 
