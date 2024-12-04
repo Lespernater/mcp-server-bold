@@ -1,14 +1,16 @@
+# ZED Integration is Broken ATM
+
 id = "mcp-server-bold"
 name = "BOLD Context Server"
 description = "Model Context Server for BOLD API"
 version = "0.2.1"
 schema_version = 1
 authors = ["Nate Lesperance <lesperan@uoguelph.ca>"]
-# NEED TO UPDATE
-# repository = "https://github.com/lespernater/mcp-server-bold"
+repository = "https://github.com/lespernater/mcp-server-bold"
 
 [context_servers.mcp-server-bold]
 name = "BOLD Context Server"
+
 
 [slash_commands.bold]
 description = "Queries the BOLD API"
