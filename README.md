@@ -34,9 +34,9 @@ npx @modelcontextprotocol/inspector python -m mcp_server_bold
 
 ## Configuration
 
-### Configure for Claude.app
+### Configure for Claude Destop App
 
-Add to your `claude_desktop_config.json` found easiest through Claude Desktop settings:
+Add to your `claude_desktop_config.json`, found easiest through the Claude Desktop settings:
 
 <details>
 <summary>Add to claude config:</summary>
@@ -51,9 +51,34 @@ Add to your `claude_desktop_config.json` found easiest through Claude Desktop se
 ```
 </details>
 
-You'll need to restart Claude Desktop, you should see a new plug icon in your chat prompt to confirm the BOLD MCP Server is detected.
+You'll need to restart Claude Desktop, you should see a new plug icon and/or hammer icons in your chat prompt that confirms the BOLD MCP Server is detected.
 
-Each time you create a new chat that queries BOLD through the MCP Server, you will have to agree to permit access to the MCP Server.
+Each time you create a new chat that queries BOLD through the MCP Server, you will have to agree to permit access to the MCP Server's Tool.
+
+If it isn't working with the above set up, you can try creating a separate conda env and running Claude from there.
+
+```
+conda activate <custom_env>
+git clone https://github.com/Lespernater/mcp-server-bold.git
+cd mcp-server-bold
+pip install -e .
+open -a "Claude"
+```
+
+You may also need to point to absolute path of python in `claude_desktop_config.json`
+
+<details>
+<summary>Add to claude config:</summary>
+
+```json
+"mcpServers": {
+  "bold": {
+    "command": "/path/to/bin/python",
+    "args": ["-m", "mcp_server_bold"]
+  }
+}
+```
+</details>
 
 ### Configure for Zed is coming soon
 
