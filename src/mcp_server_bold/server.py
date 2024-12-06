@@ -13,9 +13,9 @@ from mcp.types import (
 from enum import Enum
 from pydantic import BaseModel, Field
 
-# Defaults
 API_BASE_URL = "http://v3.boldsystems.org/index.php/API_Public/"
-DEFAULT_PARAMETERS = {"format": "xml"}
+DEFAULT_PARAMETERS = {"format": "tsv"}
+logger = logging.getLogger(__name__)
 
 class BoldQuery(BaseModel):
     taxon: str = Field(default="", description="""Taxonomic query (e.g., 'Aves', 'Bos taurus')""")
@@ -26,8 +26,10 @@ class BoldQuery(BaseModel):
     institution: str = Field(default="", description="""Specimen storing institutions (pipe-delimited)""")
     researchers: str = Field(default="", description="""Collector or identifier names (pipe-delimited)""")
 
+
 class BoldSpecQuery(BoldQuery):
-    format: str = Field(default="xml", examples=["xml", "tsv"])
+    format: str = Field(default="tsv", examples=["xml", "tsv"])
+
 
 class BoldSeqQuery(BoldQuery):
     marker: str = Field(default="", description="""Marker codes like 'matK', 'rbcL', 'COI-5P' (pipe-delimited)""")
@@ -38,106 +40,81 @@ class BoldTools(str, Enum):
     SEQUENCE_SPECIMEN = "sequence-specimen-search"
 
 
+async def base_fetch(search="specimen", **kwargs):
+    """
+    Fetch specimens from BOLD API based on provided parameters.
+
+    :param kwargs: Parameters for BOLD specimen query
+    :return: JSON of retrieved specimen data
+    """
+    # Prepare query parameters
+    query_params = {**DEFAULT_PARAMETERS, **kwargs}
+    logger.info(f"Fetching specimens with parameters: {query_params}")
+
+    assert (search in ["specimen", "combined"])
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Build formatted query string to add to API CALL
+            query_string = '&'.join([
+                f"{key}={requests.utils.quote(str(value))}"
+                for key, value in query_params.items()
+                if value != ""
+            ])
+            query_url = f"{API_BASE_URL}{search}?{query_string}"
+            response = await client.get(query_url)  # Query API
+        response.raise_for_status()  # Raise any errors
+        logger.info("Successfully fetched specimens.")
+
+        # Check the format parameter to determine how to handle the response
+        if query_params.get('format') == 'tsv':
+            # Convert tsv response to a list of dictionary before json, with commentary on length
+            tsv_data = response.text.splitlines()
+            headers = tsv_data[0].split('\t')
+            json_data = [dict(zip(headers, row.split('\t'))) for row in tsv_data[1:2000]]
+            length = len(json_data)
+        elif query_params.get('format') == 'xml':
+            # Convert xml response to an OrderedDict[str, Any] before json, with commentary on length
+            xml_data = response.text
+            json_data = xmltodict.parse(xml_data)
+            length = len(json_data)
+        else:
+            logger.error("Unsupported format requested.")
+            raise ValueError("Unsupported format requested.")
+        if length > 2000:  # Add truncated message
+            logger.info("Truncating fetched specimens (length).")
+            trunc_json = [{"message": f"True length is {length} total specimens but truncated here to first 2000."}]
+            json_out = {"commentary": trunc_json, "data": json_data}
+        else:
+            json_out = json_data
+        return json.dumps(json_out)  # Return JSON response
+    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        logger.error(f"Error fetching specimens: {str(e)}")
+        raise
+
+
+async def fetch_bold_specimens(**kwargs):
+    """
+    Fetch specimen records
+
+    :param kwargs: Parameters for BOLD specimen query
+    :return: JSON of retrieved data
+    """
+    return base_fetch(search="specimen",**kwargs)
+
+
+async def fetch_bold_seq_specimens(**kwargs):
+    """
+    Fetch combined specimen and sequence records
+
+    :param kwargs: Parameters for BOLD combined query
+    :return: JSON of retrieved data
+    """
+    return base_fetch(search="combined",**kwargs)
+
+
 async def serve() -> None:
-    logger = logging.getLogger(__name__)
-
     server = Server("mcp-server-bold")
-
-    async def fetch_bold_specimens(**kwargs):
-        """
-        Fetch specimens from BOLD API based on provided parameters.
-
-        :param kwargs: Parameters for BOLD specimen query
-        :return: JSON of retrieved specimen data
-        """
-        # Prepare query parameters
-        query_params = {**DEFAULT_PARAMETERS, **kwargs} if isinstance(DEFAULT_PARAMETERS, dict) else {}
-        logger.info(f"Fetching specimens with parameters: {query_params}")
-
-        try:
-            async with httpx.AsyncClient() as client:
-                # Build formatted query string to add to API CALL
-                query_string = '&'.join([
-                    f"{key}={requests.utils.quote(str(value))}" for key, value in query_params.items() if value != ""
-                ])
-
-                # Query API
-                response = await client.get(f"{API_BASE_URL}specimen?{query_string}")
-            response.raise_for_status()  # Raise any errors
-            logger.info("Successfully fetched specimens.")
-
-            # Check the format parameter to determine how to handle the response
-            if query_params.get('format') == 'tsv':
-                # For TSV format, convert response to a structured dictionary
-                tsv_data = response.text.splitlines()
-                headers = tsv_data[0].split('\t')
-                json_list = [dict(zip(headers, row.split('\t'))) for row in tsv_data[1:]]
-                return json.dumps(json_list)  # Return JSON response
-            elif query_params.get('format') == 'xml':
-                # Convert XML response to JSON
-                xml_data = response.text
-                json_data = xmltodict.parse(xml_data)
-                return json.dumps(json_data)  # Return JSON response
-            else:
-                logger.error("Unsupported format requested.")
-                raise ValueError("Unsupported format requested.")
-        except (httpx.HTTPStatusError, httpx.RequestError) as e:
-            logger.error(f"Error fetching specimens: {str(e)}")
-            raise
-
-    async def fetch_bold_seq_specimens(**kwargs):
-        """
-        Fetch specimens with sequences from BOLD API based on provided parameters.
-
-        :param kwargs: Parameters for BOLD specimen query
-        :return: JSON of retrieved specimen plus sequences data
-        """
-        # Prepare query parameters
-        query_params = {**DEFAULT_PARAMETERS, **kwargs} if isinstance(DEFAULT_PARAMETERS, dict) else {}
-        # Must be tsv for combined query
-        query_params["format"] = "tsv"
-        logger.info(f"Fetching specimens with parameters: {query_params}")
-
-        try:
-            async with httpx.AsyncClient() as client:
-                # Build formatted query string to add to API CALL
-                query_string = '&'.join([
-                    f"{key}={requests.utils.quote(str(value))}" for key, value in query_params.items() if value != ""
-                ])
-
-                # Query API
-                response = await client.get(f"{API_BASE_URL}combined?{query_string}")
-            response.raise_for_status()  # Raise any errors
-            logger.info("Successfully fetched specimens.")
-
-            # Check the format parameter to determine how to handle the response
-            if query_params.get('format') == 'tsv':
-                # For TSV format, convert response to a structured dictionary
-                tsv_data = response.text.splitlines()
-                headers = tsv_data[0].split('\t')
-                json_list = [dict(zip(headers, row.split('\t'))) for row in tsv_data[1:]]
-                return json.dumps(json_list)  # Return JSON response
-            else:
-                logger.error("Unsupported format requested.")
-                raise ValueError("Unsupported format requested.")
-        except (httpx.HTTPStatusError, httpx.RequestError) as e:
-            logger.error(f"Error fetching specimens: {str(e)}")
-            raise
-
-    # WIP
-    async def read_log_file():
-        logger = logging.getLogger(__name__)
-        log_file_path = Path("server.log")  # Path to the log file
-
-        try:
-            with log_file_path.open("r") as log_file:
-                log_contents = log_file.read()
-                logger.info("Log file read successfully.")
-                return log_contents
-        except Exception as e:
-            logger.error(f"Error reading log file: {str(e)}")
-            return "Could not read log file."
-
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -149,7 +126,7 @@ async def serve() -> None:
             ),
             Tool(
                 name=BoldTools.SEQUENCE_SPECIMEN,
-                description="Query BOLD Rest API for both specimen info and sequence",
+                description="Query BOLD Rest API for both specimen info and nucleotide (DNA) sequence",
                 inputSchema=BoldSeqQuery.schema(),
             ),
             # Add new tools here
