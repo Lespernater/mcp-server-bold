@@ -40,7 +40,7 @@ class BoldTools(str, Enum):
     SEQUENCE_SPECIMEN = "sequence-specimen-search"
 
 
-async def base_fetch(search="specimen", **kwargs):
+async def base_fetch(**kwargs):
     """
     Fetch specimens from BOLD API based on provided parameters.
 
@@ -49,9 +49,8 @@ async def base_fetch(search="specimen", **kwargs):
     """
     # Prepare query parameters
     query_params = {**DEFAULT_PARAMETERS, **kwargs}
+    search = query_params.pop("search")
     logger.info(f"Fetching specimens with parameters: {query_params}")
-
-    assert (search in ["specimen", "combined"])
 
     try:
         async with httpx.AsyncClient() as client:
@@ -63,7 +62,14 @@ async def base_fetch(search="specimen", **kwargs):
             ])
             query_url = f"{API_BASE_URL}{search}?{query_string}"
             response = await client.get(query_url)  # Query API
-        response.raise_for_status()  # Raise any errors
+
+        if response.status_code != httpx.codes.OK:
+            logger.error(f"HTTP error occurred: {response.status_code} - {response.text}")
+            return json.dumps({"message": f"""
+                Search is likely too broad, narrow your query to few specimen.
+                HTTP error occurred: {response.status_code}
+                """})
+
         logger.info("Successfully fetched specimens.")
 
         # Check the format parameter to determine how to handle the response
@@ -83,7 +89,7 @@ async def base_fetch(search="specimen", **kwargs):
             raise ValueError("Unsupported format requested.")
         if length > 2000:  # Add truncated message
             logger.info("Truncating fetched specimens (length).")
-            trunc_json = [{"message": f"True length is {length} total specimens but truncated here to first 2000."}]
+            trunc_json = {"message": f"True length is {length} total specimens but truncated here to first 2000."}
             json_out = {"commentary": trunc_json, "data": json_data}
         else:
             json_out = json_data
@@ -91,26 +97,6 @@ async def base_fetch(search="specimen", **kwargs):
     except (httpx.HTTPStatusError, httpx.RequestError) as e:
         logger.error(f"Error fetching specimens: {str(e)}")
         raise
-
-
-async def fetch_bold_specimens(**kwargs):
-    """
-    Fetch specimen records
-
-    :param kwargs: Parameters for BOLD specimen query
-    :return: JSON of retrieved data
-    """
-    return base_fetch(search="specimen",**kwargs)
-
-
-async def fetch_bold_seq_specimens(**kwargs):
-    """
-    Fetch combined specimen and sequence records
-
-    :param kwargs: Parameters for BOLD combined query
-    :return: JSON of retrieved data
-    """
-    return base_fetch(search="combined",**kwargs)
 
 
 async def serve() -> None:
@@ -139,23 +125,25 @@ async def serve() -> None:
 
         # Ensure format is set, defaulting to xml
         if 'format' not in query_params:
-            query_params['format'] = 'xml'
+            query_params['format'] = 'tsv'
 
         logger.info(f"Calling tool with parameters: {query_params}")
         match name:
             case BoldTools.SPECIMEN:
+                query_params["search"] = "specimen"
                 # Fetch specimens
-                specimen_data = await fetch_bold_specimens(**query_params)
+                specimen_data = await base_fetch(**query_params)
                 return [TextContent(
                     type="text",
                     text=f"Specimen returned:\n{json.dumps(specimen_data)}"
                 )]
             case BoldTools.SEQUENCE_SPECIMEN:
+                query_params["search"] = "combined"
                 # Fetch specimens
-                specimen_data = await fetch_bold_seq_specimens(**query_params)
+                combined_data = await base_fetch(**query_params)
                 return [TextContent(
                     type="text",
-                    text=f"Specimen with sequences returned:\n{json.dumps(specimen_data)}"
+                    text=f"Specimen with sequences returned:\n{json.dumps(combined_data)}"
                 )]
             # Add other tools here
         # When don't recognize tool
