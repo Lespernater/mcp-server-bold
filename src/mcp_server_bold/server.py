@@ -3,7 +3,6 @@ import xmltodict
 import requests
 import httpx
 import json
-from pathlib import Path
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
@@ -37,7 +36,7 @@ class BoldSeqQuery(BoldQuery):
 
 class BoldTools(str, Enum):
     SPECIMEN = "specimen-search"
-    SEQUENCE_SPECIMEN = "sequence-specimen-search"
+    SEQUENCE_SPECIMEN = "combined-search"
 
 
 async def base_fetch(**kwargs):
@@ -66,28 +65,28 @@ async def base_fetch(**kwargs):
         if response.status_code != httpx.codes.OK:
             logger.error(f"HTTP error occurred: {response.status_code} - {response.text}")
             return json.dumps({"message": f"""
-                Search is likely too broad, narrow your query to few specimen.
+                Search is likely too broad, narrow your query to fewer specimen.
                 HTTP error occurred: {response.status_code}
                 """})
 
         logger.info("Successfully fetched specimens.")
 
-        # Check the format parameter to determine how to handle the response
+        # Check the format to determine how to handle the response
         if query_params.get('format') == 'tsv':
-            # Convert tsv response to a list of dictionary before json, with commentary on length
+            # Convert tsv response to list[dict] before json
             tsv_data = response.text.splitlines()
             headers = tsv_data[0].split('\t')
             json_data = [dict(zip(headers, row.split('\t'))) for row in tsv_data[1:2000]]
             length = len(json_data)
         elif query_params.get('format') == 'xml':
-            # Convert xml response to an OrderedDict[str, Any] before json, with commentary on length
+            # Convert xml response to OrderedDict[str, Any] before json
             xml_data = response.text
             json_data = xmltodict.parse(xml_data)
             length = len(json_data)
         else:
             logger.error("Unsupported format requested.")
             raise ValueError("Unsupported format requested.")
-        if length > 2000:  # Add truncated message
+        if length > 2000:  # Add truncating message
             logger.info("Truncating fetched specimens (length).")
             trunc_json = {"message": f"True length is {length} total specimens but truncated here to first 2000."}
             json_out = {"commentary": trunc_json, "data": json_data}
@@ -123,7 +122,7 @@ async def serve() -> None:
         # Remove None values and prepare query
         query_params = {k: v for k, v in arguments.items() if v is not None}
 
-        # Ensure format is set, defaulting to xml
+        # Ensure format is set, defaulting to tsv
         if 'format' not in query_params:
             query_params['format'] = 'tsv'
 
