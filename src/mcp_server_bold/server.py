@@ -3,6 +3,7 @@ import xmltodict
 import requests
 import httpx
 import json
+import asyncio
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
@@ -14,6 +15,7 @@ from pydantic import BaseModel, Field
 
 API_BASE_URL = "http://v3.boldsystems.org/index.php/API_Public/"
 DEFAULT_PARAMETERS = {"format": "tsv"}
+
 logger = logging.getLogger(__name__)
 
 class BoldQuery(BaseModel):
@@ -51,52 +53,54 @@ async def base_fetch(**kwargs):
     search = query_params.pop("search")
     logger.info(f"Fetching specimens with parameters: {query_params}")
 
-    try:
-        async with httpx.AsyncClient() as client:
-            # Build formatted query string to add to API CALL
-            query_string = '&'.join([
-                f"{key}={requests.utils.quote(str(value))}"
-                for key, value in query_params.items()
-                if value != ""
-            ])
-            query_url = f"{API_BASE_URL}{search}?{query_string}"
-            response = await client.get(query_url)  # Query API
+    # Build formatted query string to add to API CALL
+    query_string = '&'.join([
+        f"{key}={requests.utils.quote(str(value))}"
+        for key, value in query_params.items()
+        if value != ""
+    ])
+    query_url = f"{API_BASE_URL}{search}?{query_string}"
 
-        if response.status_code != httpx.codes.OK:
-            logger.error(f"HTTP error occurred: {response.status_code} - {response.text}")
-            return json.dumps({"message": f"""
-                Search is likely too broad, narrow your query to fewer specimen.
-                HTTP error occurred: {response.status_code}
-                """})
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            response = await client.get(query_url)  # Query API
+            response.raise_for_status()  # Ensure we handle bad responses
 
         logger.info("Successfully fetched specimens.")
 
         # Check the format to determine how to handle the response
         if query_params.get('format') == 'tsv':
             # Convert tsv response to list[dict] before json
-            tsv_data = response.text.splitlines()
-            headers = tsv_data[0].split('\t')
-            json_data = [dict(zip(headers, row.split('\t'))) for row in tsv_data[1:2000]]
-            length = len(json_data)
+            json_data = []
+            headers = None
+            async for chunk in response.aiter_bytes():  # Stream response
+                # Decode and process in chunks
+                lines = chunk.decode('utf-8').splitlines()
+                if headers is None:
+                    headers = lines[0].split('\t')  # Read headers from the first chunk
+                json_data.extend(dict(zip(headers, line.split('\t'))) for line in lines[1:])
         elif query_params.get('format') == 'xml':
             # Convert xml response to OrderedDict[str, Any] before json
-            xml_data = response.text
-            json_data = xmltodict.parse(xml_data)
-            length = len(json_data)
+            xml_data = bytearray()  # Use bytearray to accumulate chunks
+            async for chunk in response.aiter_bytes():  # Stream response
+                xml_data.extend(chunk)
+                json_data = xmltodict.parse(xml_data.decode('utf-8'))
         else:
             logger.error("Unsupported format requested.")
             raise ValueError("Unsupported format requested.")
-        if length > 2000:  # Add truncating message
-            logger.info("Truncating fetched specimens (length).")
-            trunc_json = {"message": f"True length is {length} total specimens but truncated here to first 2000."}
-            json_out = {"commentary": trunc_json, "data": json_data}
-        else:
-            json_out = json_data
-        return json.dumps(json_out)  # Return JSON response
-    except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        return json.dumps(json_data)  # Return JSON response
+    except (asyncio.TimeoutError, httpx.TimeoutException, asyncio.CancelledError) as exc:
+        logger.error(f"{str(exc)}, likely need to narrow to fewer specimen")
+        return json.dumps({"message":f"{str(exc)}, likely need to narrow to fewer specimen"})
+    except httpx.HTTPStatusError as exc:
+        logger.error(f"HTTP error occurred: {exc.response.status_code} - {exc.response.text}")
+        return json.dumps({"message": f"HTTP error occurred: {exc.response.status_code}"})
+    except httpx.RequestError as e:
         logger.error(f"Error fetching specimens: {str(e)}")
-        raise
-
+        return json.dumps({"message": f"HTTP RequestError occurred: {str(e)}"})
+    except Exception as ex:
+        logger.error(f"Error fetching specimens: {str(ex)}")
+        return json.dumps({"message": f"Error occurred: {str(ex)}"})
 
 async def serve() -> None:
     server = Server("mcp-server-bold")

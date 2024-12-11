@@ -6,7 +6,7 @@ from .server import serve
 @click.command()
 @click.option("-v", "--verbose", count=True)
 
-def main(verbose: bool) -> None:
+def main(verbose: int) -> None:
     """MCP BOLD Server - BOLD Specimen functionality for MCP"""
     import asyncio
 
@@ -16,7 +16,11 @@ def main(verbose: bool) -> None:
     elif verbose >= 2:
         logging_level = logging.DEBUG
 
-    logging.basicConfig(level=logging_level, stream=sys.stderr)
+    logging.basicConfig(
+        level=logging_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stderr
+    )
     asyncio.run(serve())
 
 if __name__ == "__main__":
