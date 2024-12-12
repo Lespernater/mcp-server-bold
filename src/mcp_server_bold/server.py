@@ -88,54 +88,54 @@ async def base_fetch(**kwargs):
         if value != ""
     ])
     query_url = f"{API_BASE_URL}{search}?{query_string}"
-
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+        try:
             response = await client.get(query_url)  # Query API
             response.raise_for_status()  # Ensure we handle bad responses
 
-        logger.info("Successfully fetched specimens.")
+            logger.info("Successfully fetched specimens.")
 
-        # Check the format to determine how to handle the response
-        if query_params.get('format') == 'tsv':
-            # Convert tsv response to list[dict] before json
-            json_data = []
-            headers = None
-            async for chunk in response.aiter_bytes():  # Stream response
-                # Decode and process in chunks
-                lines = chunk.decode('utf-8').splitlines()
-                if headers is None:
-                    headers = lines[0].split('\t')  # Read headers from the first chunk
-                json_data.extend(dict(zip(headers, line.split('\t'))) for line in lines[1:])
-        elif query_params.get('format') == 'xml':
-            # Convert xml response to OrderedDict[str, Any] before json
-            xml_data = bytearray()  # Use bytearray to accumulate chunks
-            async for chunk in response.aiter_bytes():  # Stream response
-                xml_data.extend(chunk)
-                json_data = xmltodict.parse(xml_data.decode('utf-8'))
-        else:
-            logger.error("Unsupported format requested.")
-            raise ValueError("Unsupported format requested.")
-        return json.dumps(json_data)  # Return JSON response
-    except (asyncio.TimeoutError, httpx.TimeoutException, asyncio.CancelledError) as exc:
-        logger.error(
-            f"{str(exc)}, likely need to narrow search to fewer specimen"
-        )
-        return json.dumps({
-            "message":
-            f"{str(exc)}, likely need to narrow search to fewer specimen"
-        })
-    except httpx.HTTPStatusError as exc:
-        logger.error(
-            f"HTTP error occurred: {exc.response.status_code} - {exc.response.text}"
-        )
-        return json.dumps({
-            "message":
-            f"HTTP error occurred: {exc.response.status_code}"
-        })
-    except httpx.RequestError as e:
-        logger.error(f"Error fetching specimens: {str(e)}")
-        return json.dumps({"message": f"HTTP RequestError occurred: {str(e)}"})
+            # Check the format to determine how to handle the response
+            if query_params.get('format') == 'tsv':
+                # Convert tsv response to list[dict] before json
+                json_data = []
+                headers = None
+                async for chunk in response.aiter_bytes():  # Stream response
+                    # Decode and process in chunks
+                    lines = chunk.decode('utf-8').splitlines()
+                    if headers is None:
+                        headers = lines[0].split('\t')  # Read headers from the first chunk
+                    json_data.extend(dict(zip(headers, line.split('\t'))) for line in lines[1:])
+            elif query_params.get('format') == 'xml':
+                # Convert xml response to OrderedDict[str, Any] before json
+                xml_data = bytearray()  # Use bytearray to accumulate chunks
+                async for chunk in response.aiter_bytes():  # Stream response
+                    xml_data.extend(chunk)
+                    json_data = xmltodict.parse(xml_data.decode('utf-8'))
+            else:
+                logger.error("Unsupported format requested.")
+                raise ValueError("Unsupported format requested.")
+            return json.dumps(json_data)  # Return JSON response
+        except (asyncio.TimeoutError, httpx.TimeoutException, asyncio.CancelledError) as exc:
+            logger.error(
+                f"{str(exc)}, likely need to narrow search to fewer specimen"
+            )
+            return json.dumps({
+                "message":
+                "Request timed out, likely need to narrow search to fewer specimen"
+            })
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                f"HTTP error occurred: {exc.response.status_code} - {exc.response.text}"
+            )
+            return json.dumps({
+                "message":
+                f"HTTP error occurred: {exc.response.status_code}"
+            })
+        except httpx.RequestError as e:
+            logger.error(f"Error fetching specimens: {str(e)}")
+            return json.dumps({"message": f"HTTP RequestError occurred: {str(e)}"})
+
 
 async def serve() -> None:
     """Start the MCP BOLD server and define the available tools.
@@ -179,7 +179,7 @@ async def serve() -> None:
                 specimen_data = await base_fetch(**query_params)
                 return [TextContent(
                     type="text",
-                    text=f"Specimen returned:\n{json.dumps(specimen_data)}"
+                    text=f"Returned:\n{specimen_data}"
                 )]
             case BoldTools.SEQUENCE_SPECIMEN:
                 query_params["search"] = "combined"
@@ -187,7 +187,7 @@ async def serve() -> None:
                 combined_data = await base_fetch(**query_params)
                 return [TextContent(
                     type="text",
-                    text=f"Specimen with sequences returned:\n{json.dumps(combined_data)}"
+                    text=f"Returned:\n{combined_data}"
                 )]
             # Add other tools here
         # When don't recognize tool
@@ -196,4 +196,4 @@ async def serve() -> None:
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options, raise_exceptions=True)
+        await server.run(read_stream, write_stream, options)
