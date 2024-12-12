@@ -1,16 +1,16 @@
 import logging
+import json
+import asyncio
+from enum import Enum
 import xmltodict
 import requests
 import httpx
-import json
-import asyncio
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     TextContent,
     Tool,
 )
-from enum import Enum
 from pydantic import BaseModel, Field
 
 API_BASE_URL = "http://v3.boldsystems.org/index.php/API_Public/"
@@ -19,6 +19,7 @@ DEFAULT_PARAMETERS = {"format": "tsv"}
 logger = logging.getLogger(__name__)
 
 class BoldQuery(BaseModel):
+    """Base Model to define parameters for querying the BOLD API."""
     taxon: str = Field(
         default="",
         description="""Taxonomic query (e.g., 'Aves', 'Bos taurus')"""
@@ -50,10 +51,12 @@ class BoldQuery(BaseModel):
 
 
 class BoldSpecQuery(BoldQuery):
+    """Model for formatting BOLD specimen queries with a specific output format."""
     format: str = Field(default="tsv", examples=["xml", "tsv"])
 
 
 class BoldSeqQuery(BoldQuery):
+    """Model for formatting BOLD sequence (combined) queries, which includes marker information."""
     marker: str = Field(
         default="",
         description="""Marker codes like 'matK', 'rbcL', 'COI-5P' (pipe-delimited)"""
@@ -61,6 +64,7 @@ class BoldSeqQuery(BoldQuery):
 
 
 class BoldTools(str, Enum):
+    """Enumeration of tools available for querying BOLD API."""
     SPECIMEN = "specimen-search"
     SEQUENCE_SPECIMEN = "combined-search"
 

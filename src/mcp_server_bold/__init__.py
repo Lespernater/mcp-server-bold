@@ -1,8 +1,8 @@
 """This module provides the entry point for the MCP BOLD Server."""
 import logging
 import sys
-import click
 import asyncio
+import click
 
 from .server import serve
 
