@@ -154,12 +154,12 @@ async def serve() -> None:
         return [
             Tool(
                 name=BoldTools.SPECIMEN,
-                description="Query BOLD Rest API for a specimen",
+                description="Query BOLD API for a specimen",
                 inputSchema=BoldSpecQuery.schema(),
             ),
             Tool(
                 name=BoldTools.SEQUENCE_SPECIMEN,
-                description="Query BOLD Rest API for both specimen info and nucleotide (DNA) sequence",
+                description="Query BOLD API for both specimen info and nucleotide (DNA) sequence",
                 inputSchema=BoldSeqQuery.schema(),
             ),
             # Add new tools here
