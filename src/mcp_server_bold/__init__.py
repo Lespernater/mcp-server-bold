@@ -1,14 +1,16 @@
-import click
+"""This module provides the entry point for the MCP BOLD Server."""
 import logging
 import sys
+import click
+import asyncio
+
 from .server import serve
 
 @click.command()
 @click.option("-v", "--verbose", count=True)
 
-def main(verbose: int) -> None:
+def main(verbose: int = 2) -> None:
     """MCP BOLD Server - BOLD Specimen functionality for MCP"""
-    import asyncio
 
     logging_level = logging.WARN
     if verbose == 1:

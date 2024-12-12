@@ -19,13 +19,34 @@ DEFAULT_PARAMETERS = {"format": "tsv"}
 logger = logging.getLogger(__name__)
 
 class BoldQuery(BaseModel):
-    taxon: str = Field(default="", description="""Taxonomic query (e.g., 'Aves', 'Bos taurus')""")
-    geo: str = Field(default="", description="""Geographic sites (countries/provinces, pipe-delimited)""")
-    ids: str = Field(default="", description="""Specific specimen IDs (pipe-delimited)""")
-    bin: str = Field(default="", description="""Barcode Index Number (BIN) URIs (pipe-delimited)""")
-    container: str = Field(default="", description="""Project or dataset codes (pipe-delimited)""")
-    institution: str = Field(default="", description="""Specimen storing institutions (pipe-delimited)""")
-    researchers: str = Field(default="", description="""Collector or identifier names (pipe-delimited)""")
+    taxon: str = Field(
+        default="",
+        description="""Taxonomic query (e.g., 'Aves', 'Bos taurus')"""
+    )
+    geo: str = Field(
+        default="",
+        description="""Geographic sites (countries/provinces, pipe-delimited)"""
+    )
+    ids: str = Field(
+        default="",
+        description="""Specific specimen IDs (pipe-delimited)"""
+    )
+    bin: str = Field(
+        default="",
+        description="""Barcode Index Number (BIN) URIs (pipe-delimited)"""
+    )
+    container: str = Field(
+        default="",
+        description="""Project or dataset codes (pipe-delimited)"""
+    )
+    institution: str = Field(
+        default="",
+        description="""Specimen storing institutions (pipe-delimited)"""
+    )
+    researchers: str = Field(
+        default="",
+        description="""Collector or identifier names (pipe-delimited)"""
+    )
 
 
 class BoldSpecQuery(BoldQuery):
@@ -33,7 +54,10 @@ class BoldSpecQuery(BoldQuery):
 
 
 class BoldSeqQuery(BoldQuery):
-    marker: str = Field(default="", description="""Marker codes like 'matK', 'rbcL', 'COI-5P' (pipe-delimited)""")
+    marker: str = Field(
+        default="",
+        description="""Marker codes like 'matK', 'rbcL', 'COI-5P' (pipe-delimited)"""
+    )
 
 
 class BoldTools(str, Enum):
@@ -46,7 +70,7 @@ async def base_fetch(**kwargs):
     Fetch specimens from BOLD API based on provided parameters.
 
     :param kwargs: Parameters for BOLD specimen query
-    :return: JSON of retrieved specimen data
+    :return: JSON dump of retrieved specimen data
     """
     # Prepare query parameters
     query_params = {**DEFAULT_PARAMETERS, **kwargs}
@@ -90,11 +114,21 @@ async def base_fetch(**kwargs):
             raise ValueError("Unsupported format requested.")
         return json.dumps(json_data)  # Return JSON response
     except (asyncio.TimeoutError, httpx.TimeoutException, asyncio.CancelledError) as exc:
-        logger.error(f"{str(exc)}, likely need to narrow to fewer specimen")
-        return json.dumps({"message":f"{str(exc)}, likely need to narrow to fewer specimen"})
+        logger.error(
+            f"{str(exc)}, likely need to narrow search to fewer specimen"
+        )
+        return json.dumps({
+            "message":
+            f"{str(exc)}, likely need to narrow search to fewer specimen"
+        })
     except httpx.HTTPStatusError as exc:
-        logger.error(f"HTTP error occurred: {exc.response.status_code} - {exc.response.text}")
-        return json.dumps({"message": f"HTTP error occurred: {exc.response.status_code}"})
+        logger.error(
+            f"HTTP error occurred: {exc.response.status_code} - {exc.response.text}"
+        )
+        return json.dumps({
+            "message":
+            f"HTTP error occurred: {exc.response.status_code}"
+        })
     except httpx.RequestError as e:
         logger.error(f"Error fetching specimens: {str(e)}")
         return json.dumps({"message": f"HTTP RequestError occurred: {str(e)}"})
@@ -103,6 +137,12 @@ async def base_fetch(**kwargs):
         return json.dumps({"message": f"Error occurred: {str(ex)}"})
 
 async def serve() -> None:
+    """Start the MCP BOLD server and define the available tools.
+    Initializes the server and sets handlers for listing and calling tools, including
+    handling input parameters and responses.
+
+    :return: None
+    """
     server = Server("mcp-server-bold")
 
     @server.list_tools()
