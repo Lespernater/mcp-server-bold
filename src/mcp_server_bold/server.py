@@ -136,9 +136,6 @@ async def base_fetch(**kwargs):
     except httpx.RequestError as e:
         logger.error(f"Error fetching specimens: {str(e)}")
         return json.dumps({"message": f"HTTP RequestError occurred: {str(e)}"})
-    except Exception as ex:
-        logger.error(f"Error fetching specimens: {str(ex)}")
-        return json.dumps({"message": f"Error occurred: {str(ex)}"})
 
 async def serve() -> None:
     """Start the MCP BOLD server and define the available tools.
