@@ -80,9 +80,7 @@ You may also need to point to absolute path of python in `claude_desktop_config.
 ```
 </details>
 
-### Configure for Zed is coming soon
-
-`./extension.toml` is a dev-installable extension but the slash command `/bold` is not currently working
+### Other hosts will be added as they become available (Zed currently doesn't support MCP Tools)
 
 ## Debugging
 
